@@ -141,12 +141,13 @@ def facerec_from_image(img_path, knn_clf, distance_threshold=0.6, show_image_in_
     else:
         # Load image file and find face locations
         image = face_recognition.load_image_file(img_path)
-        face_locations = face_recognition.face_locations(image)
+
+        face_locations = face_recognition.face_locations(image, model="cnn")
 
         # If no faces are found in the image, return an empty result.
         if len(face_locations) == 0:
+            print("Can't find a face!")
             return []
-
         # Find encodings for faces in the test iamge
         faces_encodings = face_recognition.face_encodings(image, known_face_locations=face_locations)
 

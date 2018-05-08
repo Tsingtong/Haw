@@ -74,7 +74,7 @@ if __name__ == '__main__':
         print('Load to memory progress done')
 
     if g.getHawType().find('train_knn_model') != -1:
-        classifier = train_model(train_data_dir=g.getDataDir(), model_save_path=g.getOutputDir(), n_neighbors=2)
+        classifier = train_model(train_data_dir=g.getDataDir(), model_save_path=g.getOutputDir(), n_neighbors=4)
         if g.storeClassifier(classifier):
             print('Train model progress done!')
 
