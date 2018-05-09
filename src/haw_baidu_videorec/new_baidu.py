@@ -4,7 +4,8 @@ from src import haw_utils
 import threading
 import time
 from aip import AipFace
-from pickle import dumps
+import datetime
+import pymysql
 
 frame_of_stream = None
 mutex = threading.Lock()
@@ -12,6 +13,55 @@ mutex = threading.Lock()
 g_face_locations = []
 g_face_names = []
 mutex1 = threading.Lock()
+
+
+class DbThread(threading.Thread):
+    def Update_Table(self, uid):  # 连接mysql 更新学号对应学生的人脸签到记录
+        time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        db = pymysql.connect("123.207.164.55", "pandeku", "pandeku", "django_stu_info", charset='utf8')
+        cursor = db.cursor()
+        sql = "UPDATE login_register_attend_user SET Is_Attend='%s' WHERE User_Id = '%s'" % ("已签到!", uid)
+        #  sql1 = "UPDATE login_register_attend_user SET Attend_Time=CURRENT_TIMESTAMP WHERE User_Id = '%s'" % (uid)
+        sql1 = "UPDATE login_register_attend_user SET Attend_Time='%s' WHERE User_Id = '%s'" % (time, uid)
+        try:
+            cursor.execute(sql)  # 执行更新
+            cursor.execute(sql1)  # 执行更新
+            db.commit()  # 提交
+        except :
+            db.rollback()  # 发生错误,回滚
+            print("Error: unable to update data")
+        db.close()
+
+    def run(self):
+        global g_face_names, mutex1
+        print('haha')
+        db = pymysql.connect("123.207.164.55", "pandeku", "pandeku", "django_stu_info", charset='utf8')
+        cursor = db.cursor()
+        while True:
+            times = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            if mutex1.acquire():
+                loc_uid = g_face_names
+                mutex1.release()
+            print('get uid:', loc_uid)
+            # # Write to db
+            # if loc_uid:
+            #     for uid in loc_uid:
+            #         sql = "UPDATE login_register_attend_user SET Is_Attend='%s' WHERE User_Id = '%s'" % ("已签到!", uid)
+            #         #  sql1 = "UPDATE login_register_attend_user SET Attend_Time=CURRENT_TIMESTAMP WHERE User_Id = '%s'" % (uid)
+            #         sql1 = "UPDATE login_register_attend_user SET Attend_Time='%s' WHERE User_Id = '%s'" % (times, uid)
+            #         try:
+            #             cursor.execute(sql)  # 执行更新
+            #             cursor.execute(sql1)  # 执行更新
+            #             db.commit()  # 提交
+            #             print('operation!')
+            #         except:
+            #             db.rollback()  # 发生错误,回滚
+            #             print("Error: unable to update data")
+            #         print('Done DB operation!')
+            # else:
+            #     continue
+        db.close()
 
 
 class RtspStreamThread(threading.Thread):
@@ -35,12 +85,15 @@ class ProcessThread(threading.Thread):
 
     def run(self):
         # Initialize some variables
+        db = pymysql.connect("123.207.164.55", "pandeku", "pandeku", "django_stu_info", charset='utf8')
+        cursor = db.cursor()
         face_locations = []
         face_encodings = []
         face_names = []
         time.sleep(3)
         global frame_of_stream, mutex
         global g_face_locations, g_face_names, mutex1
+        global g_stu_uid, mutex2
         APP_ID = '11155090'
         API_KEY = "rG3P2789bywKHfGN0OnEwAgg"
         SECRET_KEY = "yTjcZQ92dwGBl3zDY1yWzEz9fb4FeYMc"
@@ -83,19 +136,48 @@ class ProcessThread(threading.Thread):
                     with open("face.jpg", 'rb') as fp:
                         image = fp.read()
                     Res = client.multiIdentify(Group_Id, image, options)
+                    # pandeku de daima
+                    if 'error_msg' in Res:
+                        print(Res['error_msg'])
+                    else:
+                        for i in range(Res['result_num']):
+                            uid = Res['result'][i]['uid']
+                            info = str(Res['result'][i]['user_info']) + "," + str(Res['result'][i]['uid']) + "," + str(
+                                Res['result'][i]['group_id']) + "," + str(
+                                Res['result'][i]['scores'])
+                            with open("right_result_time_ues.txt", 'a') as f:
+                                f.write(info+"\n")
+                    # pandeku de daima
                     try:
                         Res['result']
                     except KeyError:
                         continue
                     else:
                         for i in range(len(Res['result'])):
-                            res = Res['result'][i]['uid']
-                            face_names.append(res)
+                            if Res['result'][i]['scores'][0] > 80:
+                                res = Res['result'][i]['uid']
+                                face_names.append(res)
+                            else:
+                                face_names.append('0')
                         print('res:', res)
                         if mutex1.acquire():
                             g_face_locations = face_locations
                             g_face_names = face_names
                             mutex1.release()
+                        for uid in face_names:
+                            times = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            sql = "UPDATE login_register_attend_user SET Is_Attend='%s' WHERE User_Id = '%s'" % ("已签到!", uid)
+                            #  sql1 = "UPDATE login_register_attend_user SET Attend_Time=CURRENT_TIMESTAMP WHERE User_Id = '%s'" % (uid)
+                            sql1 = "UPDATE login_register_attend_user SET Attend_Time='%s' WHERE User_Id = '%s'" % (times, uid)
+                            try:
+                                cursor.execute(sql)  # 执行更新
+                                cursor.execute(sql1)  # 执行更新
+                                db.commit()  # 提交
+                            except:
+                                db.rollback()  # 发生错误,回滚
+                                print("Error: unable to update data")
+                            print('DB Operation Done!')
+
 
 def display_video():
     # Get a reference to webcam #0 (the default one)
@@ -123,13 +205,21 @@ def display_video():
             # Draw a label with a name below the face
             cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (255, 0, 0), cv2.FILLED)
             font = cv2.FONT_HERSHEY_DUPLEX
-            cv2.putText(frame, 'Student', (left + 6, bottom - 6), font, 0.75, (255, 255, 255), 1)
-            cv2.putText(frame, 'Identified Students:', (30, 30), font, 0.75, (255, 255, 255), 1)
+            cv2.putText(frame, 'Student', (left + 6, bottom - 6), font, 1, (255, 255, 255), 1)
+            cv2.putText(frame, 'Identified Students:', (30, 30), font, 1, (0, 0, 255), 2)
             for i in range(len(face_names)):
-                cv2.putText(frame, str(face_names[i]), (30, 60+i*30), font, 0.75, (255, 255, 255), 1)
+                cv2.putText(frame, str(face_names[i]), (30, 60+i*30), font, 1, (255, 255, 255), 1)
 
+        # Draw Info
+        font = cv2.FONT_HERSHEY_DUPLEX
+        cv2.putText(frame, 'Student Attendance System', (990, 30), font, 0.625, (255, 255, 255), 1)
+        cv2.putText(frame, 'Alpha: v1.0.0 (Haw)', (990, 60), font, 0.625, (255, 255, 255), 1)
+        cv2.putText(frame, 'Positioning Mode : HOG', (990, 90), font, 0.625, (255, 255, 255), 1)
+        cv2.putText(frame, '@author:liuqingtong', (540, 700), font, 0.5, (255, 255, 255), 1)
+        cv2.putText(frame, '@email:1504030521@st.btbu.edu.cn', (480, 715), font, 0.5, (255, 255, 255), 1)
         # Display the resulting image
-        cv2.imshow('Video', frame)
+        # Display the resulting image
+        cv2.imshow('Student Attendance System', frame)
 
         # Hit 'q' on the keyboard to quit!
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -146,3 +236,5 @@ if __name__ == '__main__':
     rstp_thread.start()
     frame_process_thread.start()
     display_video()
+    # db_thread = DbThread()
+    # db_thread.start()
