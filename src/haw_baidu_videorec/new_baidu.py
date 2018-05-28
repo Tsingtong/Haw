@@ -154,7 +154,7 @@ class ProcessThread(threading.Thread):
                         continue
                     else:
                         for i in range(len(Res['result'])):
-                            if Res['result'][i]['scores'][0] > 80:
+                            if Res['result'][i]['scores'][0] > 70:
                                 res = Res['result'][i]['uid']
                                 face_names.append(res)
                             else:
