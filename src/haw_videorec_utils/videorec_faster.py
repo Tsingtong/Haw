@@ -17,12 +17,12 @@ def run():
     knn_clf = haw_utils.load_trained_model(model_save_path='/Users/liuqingtong/workspace/5-9_face/models/tmp')
 
     # Load a sample picture and learn how to recognize it.
-    obama_image = face_recognition.load_image_file("data/203/1706020109.jpg")
+    obama_image = face_recognition.load_image_file("/Users/liuqingtong/Desktop/PycharmProjects/Haw/Haw/data/203/1706020109.jpg")
     obama_face_encoding = face_recognition.face_encodings(obama_image)[0]
     print("obama_face_encoding:", obama_face_encoding)
 
     # Load a second sample picture and learn how to recognize it.
-    biden_image = face_recognition.load_image_file("data/203/1706020120.jpg")
+    biden_image = face_recognition.load_image_file("/Users/liuqingtong/Desktop/PycharmProjects/Haw/Haw/data/203/1706020120.jpg")
     biden_face_encoding = face_recognition.face_encodings(biden_image)[0]
 
     # Create arrays of known face encodings and their names
@@ -31,8 +31,8 @@ def run():
         biden_face_encoding
     ]
     known_face_names = [
-        "Barack Obama",
-        "Joe Biden"
+        "Student",
+        "Student"
     ]
 
     # Initialize some variables

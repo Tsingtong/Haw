@@ -6,6 +6,7 @@ import time
 from aip import AipFace
 import datetime
 import pymysql
+import numpy as np
 
 frame_of_stream = None
 mutex = threading.Lock()
@@ -85,12 +86,13 @@ class ProcessThread(threading.Thread):
 
     def run(self):
         # Initialize some variables
-        db = pymysql.connect("123.207.164.55", "pandeku", "pandeku", "django_stu_info", charset='utf8')
+        save_pic_count = 0
+        db = pymysql.connect("139.199.124.196", "hawuser", "1504030521Lqt?", "hawDB", charset='utf8')
         cursor = db.cursor()
         face_locations = []
         face_encodings = []
         face_names = []
-        time.sleep(3)
+        time.sleep(1)
         global frame_of_stream, mutex
         global g_face_locations, g_face_names, mutex1
         global g_stu_uid, mutex2
@@ -159,6 +161,10 @@ class ProcessThread(threading.Thread):
                                 face_names.append(res)
                             else:
                                 face_names.append('0')
+                        save_path = '/Users/liuqingtong/Desktop/PycharmProjects/Haw/Haw/DB/Dataset/%s_%d.jpg' % (res, save_pic_count)
+                        save_pic_count += 1
+                        print('save_path', save_path)
+                        cv2.imwrite(save_path, small_frame)
                         print('res:', res)
                         if mutex1.acquire():
                             g_face_locations = face_locations
@@ -166,9 +172,9 @@ class ProcessThread(threading.Thread):
                             mutex1.release()
                         for uid in face_names:
                             times = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            sql = "UPDATE login_register_attend_user SET Is_Attend='%s' WHERE User_Id = '%s'" % ("已签到!", uid)
+                            sql = "UPDATE stu_info SET Is_Attend='%s' WHERE User_Id = '%s'" % ("已签到!", uid)
                             #  sql1 = "UPDATE login_register_attend_user SET Attend_Time=CURRENT_TIMESTAMP WHERE User_Id = '%s'" % (uid)
-                            sql1 = "UPDATE login_register_attend_user SET Attend_Time='%s' WHERE User_Id = '%s'" % (times, uid)
+                            sql1 = "UPDATE stu_info SET Attend_Time='%s' WHERE User_Id = '%s'" % (times, uid)
                             try:
                                 cursor.execute(sql)  # 执行更新
                                 cursor.execute(sql1)  # 执行更新
@@ -177,20 +183,42 @@ class ProcessThread(threading.Thread):
                                 db.rollback()  # 发生错误,回滚
                                 print("Error: unable to update data")
                             print('DB Operation Done!')
+                            print('_______________________________________________')
 
 
 def display_video():
     # Get a reference to webcam #0 (the default one)
     # video_capture = cv2.VideoCapture("rtsp://admin:admin12345@192.168.69.237:554/Streaming/Channels/1")
-    video_capture = cv2.VideoCapture(0)
-    global g_face_locations, g_face_names, mutex1
+    time.sleep(3)
     while True:
+        img = np.zeros((720, 1280, 3), np.uint8)  # 生成一个空彩色图像
+        # if mutex1.acquire():
+        #     face_locations = g_face_locations
+        #     face_names = g_face_names
+        #     mutex1.release()
+        # img_path = '/Users/liuqingtong/Desktop/PycharmProjects/Haw/Haw/src/haw_baidu_videorec/face.jpg'
+        # pic = cv2.imread(img_path)
+        if mutex.acquire():
+            pic = frame_of_stream
+            mutex.release()
+        img = cv2.addWeighted(img, 0.7, pic, 0.3, 0)
+        # Grab a single frame of video
+        frame = pic
+
+        # Resize frame of video to 1/4 size for faster face recognition processing
+        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+        # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
+        rgb_small_frame = small_frame[:, :, ::-1]
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+        face_names = []
+        for face_encoding in face_encodings:
+            # See if the face is a match for the known face(s)
+            name = "Student"
+            face_names.append(name)
         if mutex1.acquire():
-            face_locations = g_face_locations
             face_names = g_face_names
             mutex1.release()
-        # Grab a single frame of video
-        ret, frame = video_capture.read()
         # Display the results
         for (top, right, bottom, left), name in zip(face_locations, face_names):
             # Scale back up face locations since the frame we detected in was scaled to 1/4 size
@@ -206,15 +234,21 @@ def display_video():
             cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (255, 0, 0), cv2.FILLED)
             font = cv2.FONT_HERSHEY_DUPLEX
             cv2.putText(frame, 'Student', (left + 6, bottom - 6), font, 1, (255, 255, 255), 1)
-            cv2.putText(frame, 'Identified Students:', (30, 30), font, 1, (0, 0, 255), 2)
+
+            # Draw a label with a name below the face
+            font = cv2.FONT_HERSHEY_DUPLEX
             for i in range(len(face_names)):
-                cv2.putText(frame, str(face_names[i]), (30, 60+i*30), font, 1, (255, 255, 255), 1)
+                if face_names[i] == '0':
+                    cv2.putText(frame, str("Recognizing...."), (390, 190 + i * 60), font, 2.5, (255, 255, 255), 2)
+                else:
+                    cv2.putText(frame, str(face_names[i]), (390, 190 + i * 60), font, 2.5, (255, 255, 255), 2)
 
         # Draw Info
         font = cv2.FONT_HERSHEY_DUPLEX
-        cv2.putText(frame, 'Student Attendance System', (990, 30), font, 0.625, (255, 255, 255), 1)
-        cv2.putText(frame, 'Alpha: v1.0.0 (Haw)', (990, 60), font, 0.625, (255, 255, 255), 1)
-        cv2.putText(frame, 'Positioning Mode : HOG', (990, 90), font, 0.625, (255, 255, 255), 1)
+        cv2.putText(frame, 'Identified Students:', (160, 100), font, 3, (3, 168, 158), 2)
+        cv2.putText(frame, 'Student Attendance System', (990, 630), font, 0.625, (255, 255, 255), 1)
+        cv2.putText(frame, 'Alpha: v1.1.0 (Haw)', (990, 660), font, 0.625, (255, 255, 255), 1)
+        cv2.putText(frame, 'Positioning Mode : HOG', (990, 690), font, 0.625, (255, 255, 255), 1)
         cv2.putText(frame, '@author:liuqingtong', (540, 700), font, 0.5, (255, 255, 255), 1)
         cv2.putText(frame, '@email:1504030521@st.btbu.edu.cn', (480, 715), font, 0.5, (255, 255, 255), 1)
         # Display the resulting image
@@ -226,11 +260,11 @@ def display_video():
             break
 
     # Release handle to the webcam
-    video_capture.release()
     cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
+    print('_______________________________________________')
     rstp_thread = RtspStreamThread()
     frame_process_thread = ProcessThread(model_path='/Users/liuqingtong/Desktop/PycharmProjects/Haw/Haw/DB/', distance_threshold=0.6)
     rstp_thread.start()
